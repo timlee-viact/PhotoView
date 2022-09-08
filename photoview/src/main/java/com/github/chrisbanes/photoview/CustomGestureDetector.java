@@ -142,7 +142,6 @@ class CustomGestureDetector {
                 }
                 break;
             case MotionEvent.ACTION_CANCEL:
-                mActivePointerId = INVALID_POINTER_ID;
                 // Recycle Velocity Tracker
                 if (null != mVelocityTracker) {
                     mVelocityTracker.recycle();
