@@ -14,22 +14,21 @@
  limitations under the License.
  */
 package com.github.chrisbanes.photoview;
-
 import android.content.Context;
 import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
 import android.view.VelocityTracker;
 import android.view.ViewConfiguration;
-
 /**
  * Does a whole lot of gesture detecting.
  */
 class CustomGestureDetector {
 
     private static final int INVALID_POINTER_ID = -1;
+    private static final int INVALID_INDEX = -1;
 
     private int mActivePointerId = INVALID_POINTER_ID;
-    private int mActivePointerIndex = 0;
+
     private final ScaleGestureDetector mDetector;
 
     private VelocityTracker mVelocityTracker;
@@ -39,44 +38,26 @@ class CustomGestureDetector {
     private final float mTouchSlop;
     private final float mMinimumVelocity;
     private OnGestureListener mListener;
-
     CustomGestureDetector(Context context, OnGestureListener listener) {
         final ViewConfiguration configuration = ViewConfiguration
                 .get(context);
         mMinimumVelocity = configuration.getScaledMinimumFlingVelocity();
         mTouchSlop = configuration.getScaledTouchSlop();
-
         mListener = listener;
         ScaleGestureDetector.OnScaleGestureListener mScaleListener = new ScaleGestureDetector.OnScaleGestureListener() {
-            private float lastFocusX, lastFocusY = 0;
-
             @Override
             public boolean onScale(ScaleGestureDetector detector) {
                 float scaleFactor = detector.getScaleFactor();
-
                 if (Float.isNaN(scaleFactor) || Float.isInfinite(scaleFactor))
                     return false;
-             
-                if (scaleFactor >= 0) {
-                    mListener.onScale(scaleFactor,
-                            detector.getFocusX(),
-                            detector.getFocusY(),
-                            detector.getFocusX() - lastFocusX,
-                            detector.getFocusY() - lastFocusY
-                    );
-                    lastFocusX = detector.getFocusX();
-                    lastFocusY = detector.getFocusY();
-                }
+                mListener.onScale(scaleFactor,
+                        detector.getFocusX(), detector.getFocusY());
                 return true;
             }
-
             @Override
             public boolean onScaleBegin(ScaleGestureDetector detector) {
-                lastFocusX = detector.getFocusX();
-                lastFocusY = detector.getFocusY();
                 return true;
             }
-
             @Override
             public void onScaleEnd(ScaleGestureDetector detector) {
                 // NO-OP
@@ -85,30 +66,41 @@ class CustomGestureDetector {
         mDetector = new ScaleGestureDetector(context, mScaleListener);
     }
 
+    private int getActivePointerIndex(MotionEvent ev) {
+        return mActivePointerId == INVALID_POINTER_ID ? INVALID_INDEX : ev.findPointerIndex(mActivePointerId);
+    }
+
     private float getActiveX(MotionEvent ev) {
+        int index = getActivePointerIndex(ev);
+        if (index == INVALID_INDEX) {
+            return ev.getX();
+        }
+
         try {
-            return ev.getX(mActivePointerIndex);
+            return ev.getX(index);
         } catch (Exception e) {
             return ev.getX();
         }
     }
 
     private float getActiveY(MotionEvent ev) {
+        int index = getActivePointerIndex(ev);
+        if (index == INVALID_INDEX) {
+            return ev.getY();
+        }
+
         try {
-            return ev.getY(mActivePointerIndex);
+            return ev.getY(index);
         } catch (Exception e) {
             return ev.getY();
         }
     }
-
     public boolean isScaling() {
         return mDetector.isInProgress();
     }
-
     public boolean isDragging() {
         return mIsDragging;
     }
-
     public boolean onTouchEvent(MotionEvent ev) {
         try {
             mDetector.onTouchEvent(ev);
@@ -118,18 +110,15 @@ class CustomGestureDetector {
             return true;
         }
     }
-
     private boolean processTouchEvent(MotionEvent ev) {
         final int action = ev.getAction();
         switch (action & MotionEvent.ACTION_MASK) {
             case MotionEvent.ACTION_DOWN:
                 mActivePointerId = ev.getPointerId(0);
-
                 mVelocityTracker = VelocityTracker.obtain();
                 if (null != mVelocityTracker) {
                     mVelocityTracker.addMovement(ev);
                 }
-
                 mLastTouchX = getActiveX(ev);
                 mLastTouchY = getActiveY(ev);
                 mIsDragging = false;
@@ -138,18 +127,15 @@ class CustomGestureDetector {
                 final float x = getActiveX(ev);
                 final float y = getActiveY(ev);
                 final float dx = x - mLastTouchX, dy = y - mLastTouchY;
-
                 if (!mIsDragging) {
                     // Use Pythagoras to see if drag length is larger than
                     // touch slop
                     mIsDragging = Math.sqrt((dx * dx) + (dy * dy)) >= mTouchSlop;
                 }
-
                 if (mIsDragging) {
                     mListener.onDrag(dx, dy);
                     mLastTouchX = x;
                     mLastTouchY = y;
-
                     if (null != mVelocityTracker) {
                         mVelocityTracker.addMovement(ev);
                     }
@@ -164,19 +150,15 @@ class CustomGestureDetector {
                 }
                 break;
             case MotionEvent.ACTION_UP:
-                mActivePointerId = INVALID_POINTER_ID;
                 if (mIsDragging) {
                     if (null != mVelocityTracker) {
                         mLastTouchX = getActiveX(ev);
                         mLastTouchY = getActiveY(ev);
-
                         // Compute velocity within the last 1000ms
                         mVelocityTracker.addMovement(ev);
                         mVelocityTracker.computeCurrentVelocity(1000);
-
                         final float vX = mVelocityTracker.getXVelocity(), vY = mVelocityTracker
                                 .getYVelocity();
-
                         // If the velocity is greater than minVelocity, call
                         // listener
                         if (Math.max(Math.abs(vX), Math.abs(vY)) >= mMinimumVelocity) {
@@ -185,6 +167,8 @@ class CustomGestureDetector {
                         }
                     }
                 }
+
+                mActivePointerId = INVALID_POINTER_ID;
 
                 // Recycle Velocity Tracker
                 if (null != mVelocityTracker) {
@@ -206,9 +190,6 @@ class CustomGestureDetector {
                 break;
         }
 
-        mActivePointerIndex = ev
-                .findPointerIndex(mActivePointerId != INVALID_POINTER_ID ? mActivePointerId
-                        : 0);
         return true;
     }
 }
