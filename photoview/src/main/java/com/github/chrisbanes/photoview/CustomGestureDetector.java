@@ -88,7 +88,6 @@ class CustomGestureDetector {
         if (index == INVALID_INDEX) {
             return ev.getY();
         }
-
         try {
             return ev.getY(index);
         } catch (Exception e) {
